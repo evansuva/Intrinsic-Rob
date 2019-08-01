@@ -1,0 +1,10 @@
+__pycache__/
+data/
+genearative/__pycache__
+generative/logs
+generative/models
+generative/results
+train_classifier/__pycache__
+train_classifier/models
+train_classifier/results
+train_classifier/saved_log

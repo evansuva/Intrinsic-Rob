@@ -5,6 +5,8 @@ import torch.nn.functional as f
 import torch.optim as optim
 from dataloader import dataloader
 
+from torch.autograd import grad
+
 class generator(nn.Module):
     
     def __init__(self, input_dim=100, output_dim=1, input_size=32, class_num=10):
@@ -78,21 +80,23 @@ class discriminator(nn.Module):
 
         return d, c
 
-class ACGAN(object):
+class DSGAN(object):
     def __init__(self, args):
         # parameters for train
         self.epoch = args.epoch
         self.batch_size = args.batch_size
-        self.save_dir = args.save_dir
+        self.save_dir = args.save_dir 
         self.result_dir = args.result_dir
         self.dataset = args.dataset
         # self.log_dir = args.log_dir
         self.gpu_mode = args.gpu_mode
-        self.model_name = args.gan_type
+        self.model_name = args.gan_type + '_' + str(args.lambda_)
         self.input_size = args.input_size
         self.z_dim = 100
         self.class_num = 10
         self.sample_num = self.class_num ** 2
+        self.lambda_ = args.lambda_
+        self.n_repeat = args.n_repeat
 
         # parameters for evaluate
         self.n_samples = args.n_samples
@@ -104,6 +108,7 @@ class ACGAN(object):
         self.train_size = args.train_size
         self.test_size = args.test_size
         self.train_parts = args.train_parts
+
 
         # load dataset
         self.data_loader = dataloader(self.dataset, self.input_size, self.batch_size)
@@ -194,6 +199,7 @@ class ACGAN(object):
                 # update G network
                 self.G_optimizer.zero_grad()
 
+                z_.requires_grad = True
                 G_ = self.G(z_, y_vec_)
                 D_fake, C_fake = self.D(G_)
 
@@ -201,14 +207,35 @@ class ACGAN(object):
                 C_fake_loss = self.CE_loss(C_fake, torch.max(y_vec_, 1)[1])
 
                 G_loss += C_fake_loss
+
+                # # penalize global Lipschitz using gradient norm
+                # gradients = grad(outputs=G_, inputs=z_, grad_outputs=torch.ones(G_.size()).cuda(),
+                #                     create_graph=True, retain_graph=True, only_inputs=True)[0]
+                # reg_loss = (gradients.view(gradients.size()[0], -1).norm(2, 1) ** 2).mean()
+
+                # penalize local Lipschitz
+                reg_loss = 0
+                for j in range(self.n_repeat):
+                    v = f.normalize(torch.rand(self.batch_size, self.z_dim), p=2, dim=1)
+                    u = torch.rand(self.batch_size) + 1e-12    # avoid underflow
+                    unif_noise = (u ** (1/float(self.z_dim))).unsqueeze(1)*v
+                    unif_noise = unif_noise.cuda()
+
+                    G_neighbor_ = self.G(z_+unif_noise, y_vec_)
+                    dist_x = torch.sqrt(torch.sum((G_neighbor_.view(self.batch_size, -1) - G_.view(self.batch_size, -1))**2, dim=1))
+                    dist_z = torch.sqrt(torch.sum(unif_noise**2, dim=1))
+
+                    reg_loss += torch.mean(dist_x / dist_z)
+
+                G_loss += self.lambda_ * reg_loss / self.n_repeat
                 self.train_hist['G_loss'].append(G_loss.item())
 
                 G_loss.backward()
                 self.G_optimizer.step()
 
                 if ((iter + 1) % 100) == 0:
-                    print("Epoch: [%2d] [%4d/%4d] D_loss: %.8f, G_loss: %.8f" %
-                          ((epoch + 1), (iter + 1), self.data_loader.dataset.__len__() // self.batch_size, D_loss.item(), G_loss.item()))
+                    print("Epoch: [%2d] [%4d/%4d] D_loss: %.8f, G_loss: %.8f, reg_loss: %.4f" %
+                          ((epoch + 1), (iter + 1), self.data_loader.dataset.__len__() // self.batch_size, D_loss.item(), G_loss.item(), reg_loss.item()))
 
             self.train_hist['per_epoch_time'].append(time.time() - epoch_start_time)
             with torch.no_grad():
@@ -220,8 +247,7 @@ class ACGAN(object):
         print("Training finish!... save training results")
 
         self.save()
-        utils.generate_animation(self.result_dir + '/' + self.dataset + '/' + self.model_name + '/' + self.model_name,
-                                 self.epoch)
+        utils.generate_animation(self.result_dir + '/' + self.dataset + '/' + self.model_name + '/' + self.model_name, self.epoch)
         utils.loss_plot(self.train_hist, os.path.join(self.save_dir, self.dataset, self.model_name), self.model_name)
 
     def visualize_results(self, epoch, fix=True):
@@ -271,7 +297,7 @@ class ACGAN(object):
         self.G.load_state_dict(torch.load(os.path.join(save_dir, self.model_name + '_G.pkl')))
         self.D.load_state_dict(torch.load(os.path.join(save_dir, self.model_name + '_D.pkl')))
 
-
+    
     def get_lipschitz(self):
         self.G.eval()
         self.load()
@@ -338,8 +364,7 @@ class ACGAN(object):
 
         # np.save('data/'+self.dataset+'/'+self.model_name+'/samples_train', samples_train)
         # np.save('data/'+self.dataset+'/'+self.model_name+'/labels_train', labels_train.squeeze(1))
-        np.savez('data/'+self.dataset+'/'+self.model_name+'/train', 
-                sample=samples_train, label=labels_train.squeeze(1), lipschitz=lipschitz_train)
+        np.savez(data_dir+'/train', sample=samples_train, label=labels_train.squeeze(1), lipschitz=lipschitz_train)
 
         # for testing
         torch.manual_seed(self.manual_seed+999)
@@ -367,12 +392,11 @@ class ACGAN(object):
 
         # np.save('data/'+self.dataset+'/'+self.model_name+'/samples_test', samples_test)
         # np.save('data/'+self.dataset+'/'+self.model_name+'/labels_test', labels_test.squeeze(1))
-        np.savez('data/'+self.dataset+'/'+self.model_name+'/test', 
-                sample=samples_test, label=labels_test.squeeze(1), lipschitz=lipschitz_test)
+        np.savez(data_dir+'/test', sample=samples_test, label=labels_test.squeeze(1), lipschitz=lipschitz_test)
 
         samples_test = samples_test.transpose(0, 2, 3, 1)
         utils.save_images(samples_test[:100, :, :, :], [10, 10], 
-                          self.save_dir+'/'+self.dataset+'/'+self.model_name+'/ACGAN_gen_img.png')
+                          self.save_dir+'/'+self.dataset+'/'+self.model_name+'/gen_img.png')
 
 
 # compute the local lipschitz constant of a generator using samples

@@ -51,8 +51,10 @@ def parse_args():
     parser.add_argument('--beta2', type=float, default=0.999)
     parser.add_argument('--gpu_mode', type=bool, default=True)
     parser.add_argument('--benchmark_mode', type=bool, default=True)
-    parser.add_argument('--lambda_', type=float, default=0.1, help='regularizer parameter')
-    parser.add_argument('--n_repeat', type=int, default=10, help='regularizer parameter')
+    
+    parser.add_argument('--alpha', type=float, default=1.0, help='penalize classification')
+    parser.add_argument('--lambda_', type=float, default=0.05, help='penalize Lipschitz')
+    # parser.add_argument('--n_repeat', type=int, default=10, help='number of sample noise')
 
     # for calculating local lipschitz constant
     parser.add_argument('--radius', type=float, default=1.0, help='latent space ball radius')

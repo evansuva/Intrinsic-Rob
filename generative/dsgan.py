@@ -95,8 +95,10 @@ class DSGAN(object):
         self.z_dim = 100
         self.class_num = 10
         self.sample_num = self.class_num ** 2
+
+        self.alpha = args.alpha
         self.lambda_ = args.lambda_
-        self.n_repeat = args.n_repeat
+        # self.n_repeat = args.n_repeat
 
         # parameters for evaluate
         self.n_samples = args.n_samples
@@ -190,7 +192,7 @@ class DSGAN(object):
                 D_fake_loss = self.BCE_loss(D_fake, self.y_fake_)
                 C_fake_loss = self.CE_loss(C_fake, torch.max(y_vec_, 1)[1])
 
-                D_loss = D_real_loss + C_real_loss + D_fake_loss + C_fake_loss
+                D_loss = D_real_loss + self.alpha*C_real_loss + D_fake_loss + self.alpha*C_fake_loss
                 self.train_hist['D_loss'].append(D_loss.item())
 
                 D_loss.backward()
@@ -206,28 +208,30 @@ class DSGAN(object):
                 G_loss = self.BCE_loss(D_fake, self.y_real_)
                 C_fake_loss = self.CE_loss(C_fake, torch.max(y_vec_, 1)[1])
 
-                G_loss += C_fake_loss
+                G_loss += self.alpha*C_fake_loss
 
-                # # penalize global Lipschitz using gradient norm
-                # gradients = grad(outputs=G_, inputs=z_, grad_outputs=torch.ones(G_.size()).cuda(),
-                #                     create_graph=True, retain_graph=True, only_inputs=True)[0]
-                # reg_loss = (gradients.view(gradients.size()[0], -1).norm(2, 1) ** 2).mean()
+                # penalize global Lipschitz using gradient norm
+                gradients = grad(outputs=G_, inputs=z_, grad_outputs=torch.ones(G_.size()).cuda(),
+                                    create_graph=True, retain_graph=True, only_inputs=True)[0]
+                reg_loss = (gradients.view(gradients.size()[0], -1).norm(2, 1) ** 2).mean()
+                G_loss += self.lambda_ * reg_loss
 
-                # penalize local Lipschitz
-                reg_loss = 0
-                for j in range(self.n_repeat):
-                    v = f.normalize(torch.rand(self.batch_size, self.z_dim), p=2, dim=1)
-                    u = torch.rand(self.batch_size) + 1e-12    # avoid underflow
-                    unif_noise = (u ** (1/float(self.z_dim))).unsqueeze(1)*v
-                    unif_noise = unif_noise.cuda()
+                # # penalize local Lipschitz
+                # reg_loss = 0
+                # for j in range(self.n_repeat):
+                #     v = f.normalize(torch.rand(self.batch_size, self.z_dim), p=2, dim=1)
+                #     u = torch.rand(self.batch_size) + 1e-12    # avoid underflow
+                #     unif_noise = (u ** (1/float(self.z_dim))).unsqueeze(1)*v
+                #     unif_noise = unif_noise.cuda()
 
-                    G_neighbor_ = self.G(z_+unif_noise, y_vec_)
-                    dist_x = torch.sqrt(torch.sum((G_neighbor_.view(self.batch_size, -1) - G_.view(self.batch_size, -1))**2, dim=1))
-                    dist_z = torch.sqrt(torch.sum(unif_noise**2, dim=1))
+                #     G_neighbor_ = self.G(z_+unif_noise, y_vec_)
+                #     dist_x = torch.sqrt(torch.sum((G_neighbor_.view(self.batch_size, -1) - G_.view(self.batch_size, -1))**2, dim=1))
+                #     dist_z = torch.sqrt(torch.sum(unif_noise**2, dim=1))
 
-                    reg_loss += torch.mean(dist_x / dist_z)
+                #     reg_loss += torch.mean(dist_x / dist_z)
+                
+                # G_loss += self.lambda_ * reg_loss / self.n_repeat
 
-                G_loss += self.lambda_ * reg_loss / self.n_repeat
                 self.train_hist['G_loss'].append(G_loss.item())
 
                 G_loss.backward()

@@ -7,6 +7,9 @@ from dataloader import dataloader
 
 from torch.autograd import grad
 
+from spectral_normalization import SpectralNorm
+
+
 class generator(nn.Module):
 
     def __init__(self, input_dim=100, output_dim=1, input_size=32, class_num=10):
@@ -17,18 +20,18 @@ class generator(nn.Module):
         self.class_num = class_num
 
         self.fc = nn.Sequential(
-            nn.Linear(self.input_dim + self.class_num, 1024),
+            SpectralNorm(nn.Linear(self.input_dim + self.class_num, 1024)),
             nn.BatchNorm1d(1024),
             nn.ReLU(),
-            nn.Linear(1024, 128 * (self.input_size // 4) * (self.input_size // 4)),
+            SpectralNorm(nn.Linear(1024, 128 * (self.input_size // 4) * (self.input_size // 4))),
             nn.BatchNorm1d(128 * (self.input_size // 4) * (self.input_size // 4)),
             nn.ReLU(),
         )
         self.deconv = nn.Sequential(
-            nn.ConvTranspose2d(128, 64, 4, 2, 1),
+            SpectralNorm(nn.ConvTranspose2d(128, 64, 4, 2, 1)),
             nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.ConvTranspose2d(64, self.output_dim, 4, 2, 1),
+            SpectralNorm(nn.ConvTranspose2d(64, self.output_dim, 4, 2, 1)),
             nn.Tanh(),
         )
         utils.initialize_weights(self)
@@ -80,7 +83,7 @@ class discriminator(nn.Module):
 
         return d, c
 
-class DSGAN(object):
+class SNGAN(object):
     def __init__(self, args):
         # parameters for train
         self.epoch = args.epoch
@@ -95,10 +98,6 @@ class DSGAN(object):
         self.z_dim = 100
         self.class_num = 10
         self.sample_num = self.class_num ** 2
-
-        self.alpha = args.alpha
-        self.lambda_ = args.lambda_
-        # self.n_repeat = args.n_repeat
 
         # parameters for evaluate
         self.n_samples = args.n_samples
@@ -192,7 +191,7 @@ class DSGAN(object):
                 D_fake_loss = self.BCE_loss(D_fake, self.y_fake_)
                 C_fake_loss = self.CE_loss(C_fake, torch.max(y_vec_, 1)[1])
 
-                D_loss = D_real_loss + self.alpha*C_real_loss + D_fake_loss + self.alpha*C_fake_loss
+                D_loss = D_real_loss + C_real_loss + D_fake_loss + C_fake_loss
                 self.train_hist['D_loss'].append(D_loss.item())
 
                 D_loss.backward()
@@ -208,32 +207,7 @@ class DSGAN(object):
                 G_loss = self.BCE_loss(D_fake, self.y_real_)
                 C_fake_loss = self.CE_loss(C_fake, torch.max(y_vec_, 1)[1])
 
-                G_loss += self.alpha*C_fake_loss
-
-                # penalize global Lipschitz using gradient norm
-                if epoch > 5:
-                    gradients = grad(outputs=G_, inputs=z_, grad_outputs=torch.ones(G_.size()).cuda(),
-                                        create_graph=True, retain_graph=True, only_inputs=True)[0]
-                else:
-                    gradients = torch.zeros(G_.size()).cuda()
-                reg_loss = (gradients.view(gradients.size()[0], -1).norm(2, 1) ** 2).mean()
-                G_loss += self.lambda_ * reg_loss
-
-                # # penalize local Lipschitz
-                # reg_loss = 0
-                # for j in range(self.n_repeat):
-                #     v = f.normalize(torch.rand(self.batch_size, self.z_dim), p=2, dim=1)
-                #     u = torch.rand(self.batch_size) + 1e-12    # avoid underflow
-                #     unif_noise = (u ** (1/float(self.z_dim))).unsqueeze(1)*v
-                #     unif_noise = unif_noise.cuda()
-
-                #     G_neighbor_ = self.G(z_+unif_noise, y_vec_)
-                #     dist_x = torch.sqrt(torch.sum((G_neighbor_.view(self.batch_size, -1) - G_.view(self.batch_size, -1))**2, dim=1))
-                #     dist_z = torch.sqrt(torch.sum(unif_noise**2, dim=1))
-
-                #     reg_loss += torch.mean(dist_x / dist_z)
-                
-                # G_loss += self.lambda_ * reg_loss / self.n_repeat
+                G_loss += C_fake_loss
 
                 self.train_hist['G_loss'].append(G_loss.item())
 
@@ -241,8 +215,8 @@ class DSGAN(object):
                 self.G_optimizer.step()
 
                 if ((iter + 1) % 100) == 0:
-                    print("Epoch: [%2d] [%4d/%4d] D_loss: %.8f, G_loss: %.8f, reg_loss: %.4f" %
-                          ((epoch + 1), (iter + 1), self.data_loader.dataset.__len__() // self.batch_size, D_loss.item(), G_loss.item(), reg_loss.item()))
+                    print("Epoch: [%2d] [%4d/%4d] D_loss: %.8f, G_loss: %.8f" %
+                          ((epoch + 1), (iter + 1), self.data_loader.dataset.__len__() // self.batch_size, D_loss.item(), G_loss.item()))
 
             self.train_hist['per_epoch_time'].append(time.time() - epoch_start_time)
             with torch.no_grad():

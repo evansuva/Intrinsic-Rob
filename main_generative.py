@@ -8,6 +8,7 @@ from gan import GAN
 from cgan import CGAN
 from acgan import ACGAN
 from dsgan import DSGAN
+from sngan import SNGAN
 
 # from torch import nn
 from torch.autograd import Variable
@@ -28,7 +29,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=desc)
     
     # for training generative model
-    parser.add_argument('--gan_type', type=str, default='ACGAN', choices=['GAN', 'CGAN', 'ACGAN', 'DSGAN'], 
+    parser.add_argument('--gan_type', type=str, default='ACGAN', choices=['GAN', 'CGAN', 'ACGAN', 'DSGAN', 'SNGAN'],
                         help='The type of GAN')
     parser.add_argument('--dataset', type=str, default='mnist', choices=['mnist', 'fashion-mnist', 'cifar10'],
                         help='The name of dataset')
@@ -44,7 +45,7 @@ def parse_args():
                         help='Directory name to save the generated images')
     parser.add_argument('--log_dir', type=str, default='generative/logs', 
                         help='Directory name to save training logs')
-    
+
     parser.add_argument('--lrG', type=float, default=0.0002)
     parser.add_argument('--lrD', type=float, default=0.0002)
     parser.add_argument('--beta1', type=float, default=0.5)
@@ -178,6 +179,8 @@ def main():
         gan = ACGAN(args)
     elif args.gan_type == 'DSGAN':
         gan = DSGAN(args)
+    elif args.gan_type == 'SNGAN':
+        gan = SNGAN(args)
     else:
         raise Exception("[!] There is no option for " + args.gan_type)
 

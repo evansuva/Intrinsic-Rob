@@ -6,9 +6,7 @@ import torch.optim as optim
 from dataloader import dataloader
 
 from torch.autograd import grad
-
 from spectral_normalization import SpectralNorm
-
 
 class generator(nn.Module):
 
@@ -43,7 +41,7 @@ class generator(nn.Module):
         x = self.deconv(x)
 
         return x
-
+        
 class discriminator(nn.Module):
 
     def __init__(self, input_dim=1, output_dim=1, input_size=32, class_num=10):
@@ -98,6 +96,9 @@ class SNGAN(object):
         self.z_dim = 100
         self.class_num = 10
         self.sample_num = self.class_num ** 2
+
+        self.alpha = args.alpha
+        self.lambda_ = args.lambda_
 
         # parameters for evaluate
         self.n_samples = args.n_samples
@@ -191,7 +192,7 @@ class SNGAN(object):
                 D_fake_loss = self.BCE_loss(D_fake, self.y_fake_)
                 C_fake_loss = self.CE_loss(C_fake, torch.max(y_vec_, 1)[1])
 
-                D_loss = D_real_loss + C_real_loss + D_fake_loss + C_fake_loss
+                D_loss = D_real_loss + self.alpha*C_real_loss + D_fake_loss + self.alpha*C_fake_loss
                 self.train_hist['D_loss'].append(D_loss.item())
 
                 D_loss.backward()
@@ -207,7 +208,15 @@ class SNGAN(object):
                 G_loss = self.BCE_loss(D_fake, self.y_real_)
                 C_fake_loss = self.CE_loss(C_fake, torch.max(y_vec_, 1)[1])
 
-                G_loss += C_fake_loss
+                G_loss += self.alpha*C_fake_loss
+
+                # penalize global Lipschitz using gradient norm
+                gradients = grad(outputs=G_, inputs=z_, grad_outputs=torch.ones(G_.size()).cuda(),
+                                    create_graph=True, retain_graph=True, only_inputs=True)[0]
+                # gradients = torch.zeros(G_.size()).cuda()
+
+                reg_loss = (gradients.view(gradients.size()[0], -1).norm(2, 1) ** 2).mean()
+                G_loss += self.lambda_ * reg_loss
 
                 self.train_hist['G_loss'].append(G_loss.item())
 
@@ -215,8 +224,8 @@ class SNGAN(object):
                 self.G_optimizer.step()
 
                 if ((iter + 1) % 100) == 0:
-                    print("Epoch: [%2d] [%4d/%4d] D_loss: %.8f, G_loss: %.8f" %
-                          ((epoch + 1), (iter + 1), self.data_loader.dataset.__len__() // self.batch_size, D_loss.item(), G_loss.item()))
+                    print("Epoch: [%2d] [%4d/%4d] D_loss: %.8f, G_loss: %.8f, reg_loss: %.4f" %
+                          ((epoch + 1), (iter + 1), self.data_loader.dataset.__len__() // self.batch_size, D_loss.item(), G_loss.item(), reg_loss.item()))
 
             self.train_hist['per_epoch_time'].append(time.time() - epoch_start_time)
             with torch.no_grad():

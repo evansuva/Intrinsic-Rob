@@ -211,11 +211,10 @@ class DSGAN(object):
                 G_loss += self.alpha*C_fake_loss
 
                 # penalize global Lipschitz using gradient norm
-                if epoch > 5:
-                    gradients = grad(outputs=G_, inputs=z_, grad_outputs=torch.ones(G_.size()).cuda(),
-                                        create_graph=True, retain_graph=True, only_inputs=True)[0]
-                else:
-                    gradients = torch.zeros(G_.size()).cuda()
+                gradients = grad(outputs=G_, inputs=z_, grad_outputs=torch.ones(G_.size()).cuda(),
+                                create_graph=True, retain_graph=True, only_inputs=True)[0]
+
+                # gradients = torch.zeros(G_.size()).cuda()
                 reg_loss = (gradients.view(gradients.size()[0], -1).norm(2, 1) ** 2).mean()
                 G_loss += self.lambda_ * reg_loss
 
@@ -338,13 +337,13 @@ class DSGAN(object):
             labels = torch.randint(0, self.class_num, (self.train_size, 1)).type(torch.LongTensor)
             sample_y = torch.zeros(self.train_size, self.class_num).scatter_(1, labels, 1)
 
-            # estimate Lipschitz constants of the conditional generator for each sampled z 
-            lipschitz = np.zeros(self.train_size)
-            for i in range(self.train_size):
-                lipschitz[i] = get_local_lipschitz(self.G, sample_z[i], sample_y[i], 
-                                        self.n_neighbors, self.gpu_mode, z_dim=100, radius=1)
-                if i % 200 == 0:            
-                    print("Iteration: [%d] [%5d/%5d] lipschitz: %.2f" % (k, i, self.train_size, lipschitz[i]))
+            # # estimate Lipschitz constants of the conditional generator for each sampled z 
+            # lipschitz = np.zeros(self.train_size)
+            # for i in range(self.train_size):
+            #     lipschitz[i] = get_local_lipschitz(self.G, sample_z[i], sample_y[i], 
+            #                             self.n_neighbors, self.gpu_mode, z_dim=100, radius=1)
+            #     if i % 200 == 0:            
+            #         print("Iteration: [%d] [%5d/%5d] lipschitz: %.2f" % (k, i, self.train_size, lipschitz[i]))
 
             if self.gpu_mode:
                 sample_z, sample_y = sample_z.cuda(), sample_y.cuda()
@@ -359,11 +358,11 @@ class DSGAN(object):
             if k==0:
                 labels_train = labels
                 samples_train = samples 
-                lipschitz_train = lipschitz
+                # lipschitz_train = lipschitz
             else:
                 labels_train = np.concatenate((labels_train, labels), axis=0)
                 samples_train = np.concatenate((samples_train, samples), axis=0)
-                lipschitz_train = np.concatenate((lipschitz_train, lipschitz), axis=None)
+                # lipschitz_train = np.concatenate((lipschitz_train, lipschitz), axis=None)
 
         data_dir = 'data/'+self.dataset+'/'+self.model_name
         if not os.path.exists(data_dir):
@@ -371,7 +370,8 @@ class DSGAN(object):
 
         # np.save('data/'+self.dataset+'/'+self.model_name+'/samples_train', samples_train)
         # np.save('data/'+self.dataset+'/'+self.model_name+'/labels_train', labels_train.squeeze(1))
-        np.savez(data_dir+'/train', sample=samples_train, label=labels_train.squeeze(1), lipschitz=lipschitz_train)
+        # np.savez(data_dir+'/train', sample=samples_train, label=labels_train.squeeze(1), lipschitz=lipschitz_train)
+        np.savez(data_dir+'/train', sample=samples_train, label=labels_train.squeeze(1))
 
         # for testing
         torch.manual_seed(self.manual_seed+999)
@@ -379,13 +379,13 @@ class DSGAN(object):
         labels_test = torch.randint(0, self.class_num, (self.test_size, 1)).type(torch.LongTensor)
         sample_y_test = torch.zeros(self.test_size, self.class_num).scatter_(1, labels_test, 1)
 
-        # estimate Lipschitz constants of the conditional generator for each sampled z 
-        lipschitz_test = np.zeros(self.test_size)
-        for i in range(self.test_size):
-            lipschitz_test[i] = get_local_lipschitz(self.G, sample_z_test[i], sample_y_test[i], 
-                                    self.n_neighbors, self.gpu_mode, z_dim=100, radius=1)
-            if i % 200 == 0:            
-                print("Iteration: [%d] [%5d/%5d] lipschitz: %.2f" % (k, i, self.train_size, lipschitz_test[i]))
+        # # estimate Lipschitz constants of the conditional generator for each sampled z 
+        # lipschitz_test = np.zeros(self.test_size)
+        # for i in range(self.test_size):
+        #     lipschitz_test[i] = get_local_lipschitz(self.G, sample_z_test[i], sample_y_test[i], 
+        #                             self.n_neighbors, self.gpu_mode, z_dim=100, radius=1)
+        #     if i % 200 == 0:            
+        #         print("Iteration: [%d] [%5d/%5d] lipschitz: %.2f" % (k, i, self.train_size, lipschitz_test[i]))
 
         if self.gpu_mode:
             sample_z_test, sample_y_test = sample_z_test.cuda(), sample_y_test.cuda()
@@ -399,7 +399,8 @@ class DSGAN(object):
 
         # np.save('data/'+self.dataset+'/'+self.model_name+'/samples_test', samples_test)
         # np.save('data/'+self.dataset+'/'+self.model_name+'/labels_test', labels_test.squeeze(1))
-        np.savez(data_dir+'/test', sample=samples_test, label=labels_test.squeeze(1), lipschitz=lipschitz_test)
+        # np.savez(data_dir+'/test', sample=samples_test, label=labels_test.squeeze(1), lipschitz=lipschitz_test)
+        np.savez(data_dir+'/test', sample=samples_test, label=labels_test.squeeze(1))
 
         samples_test = samples_test.transpose(0, 2, 3, 1)
         utils.save_images(samples_test[:100, :, :, :], [10, 10], 

@@ -1,5 +1,5 @@
-import waitGPU
-waitGPU.wait(utilization=20, available_memory=10000, interval=20)
+# import waitGPU
+# waitGPU.wait(utilization=20, available_memory=10000, interval=20)
 
 import problems as pblm
 from trainer import *
@@ -46,14 +46,14 @@ if __name__ == "__main__":
 
     elif args.prefix == "custom_mnist":
         train_loader, _, _ = pblm.custom_mnist_loaders(batch_size=args.batch_size, 
-                                            train_path='../data/mnist/ACGAN/train.npz', 
-                                            test_path = '../data/mnist/ACGAN/test.npz',
+                                            train_path='../data/mnist/DSGAN_0.005/train.npz', 
+                                            test_path = '../data/mnist/DSGAN_0.005/test.npz',
                                             ratio=args.ratio, seed=args.seed,
                                             is_lipschitz=False)
 
         _, valid_loader, test_loader = pblm.custom_mnist_loaders(batch_size=args.batch_size_test, 
-                                            train_path='../data/mnist/ACGAN/train.npz', 
-                                            test_path = '../data/mnist/ACGAN/test.npz',
+                                            train_path='../data/mnist/DSGAN_0.005/train.npz', 
+                                            test_path = '../data/mnist/DSGAN_0.005/test.npz',
                                             ratio=args.ratio, seed=args.seed,
                                             is_lipschitz=False)
 

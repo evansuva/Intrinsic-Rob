@@ -255,7 +255,10 @@ def argparser(prefix=None, method=None, batch_size=50, batch_size_test=50,
     parser.add_argument('--seed', type=int, default=seed)
     parser.add_argument('--verbose', type=int, default=verbose)
     parser.add_argument('--cuda_ids', default=None)
+
+    # parser.add_argument('--gan_type', type=str, default='ACGAN')
     parser.add_argument('--proctitle', type=str, default="")
+    
 
     args = parser.parse_args()
     if args.starting_epsilon is None:

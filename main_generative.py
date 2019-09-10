@@ -43,15 +43,10 @@ def parse_args():
                         help='Directory name to save the model')
     parser.add_argument('--result_dir', type=str, default='generative/results', 
                         help='Directory name to save the generated images')
-<<<<<<< HEAD
+
     # parser.add_argument('--log_dir', type=str, default='generative/logs', 
     #                     help='Directory name to save training logs')
-    
-=======
-    parser.add_argument('--log_dir', type=str, default='generative/logs', 
-                        help='Directory name to save training logs')
 
->>>>>>> 511fcdb25c08e3d1906361a97c10516c079cbb9c
     parser.add_argument('--lrG', type=float, default=0.0002)
     parser.add_argument('--lrD', type=float, default=0.0002)
     parser.add_argument('--beta1', type=float, default=0.5)
@@ -59,8 +54,8 @@ def parse_args():
     parser.add_argument('--gpu_mode', type=bool, default=True)
     parser.add_argument('--benchmark_mode', type=bool, default=True)
     
-    parser.add_argument('--alpha', type=float, default=1.0, help='penalize classification')
-    parser.add_argument('--lambda_', type=float, default=0.05, help='penalize Lipschitz')
+    parser.add_argument('--alpha', type=float, default=1.0, help='penalty for misclassification')
+    parser.add_argument('--lambda_', type=float, default=0, help='penalty for Lipschitz')
     # parser.add_argument('--n_repeat', type=int, default=10, help='number of sample noise')
 
     # for calculating local lipschitz constant

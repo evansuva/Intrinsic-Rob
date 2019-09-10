@@ -43,9 +43,15 @@ def parse_args():
                         help='Directory name to save the model')
     parser.add_argument('--result_dir', type=str, default='generative/results', 
                         help='Directory name to save the generated images')
+<<<<<<< HEAD
+    # parser.add_argument('--log_dir', type=str, default='generative/logs', 
+    #                     help='Directory name to save training logs')
+    
+=======
     parser.add_argument('--log_dir', type=str, default='generative/logs', 
                         help='Directory name to save training logs')
 
+>>>>>>> 511fcdb25c08e3d1906361a97c10516c079cbb9c
     parser.add_argument('--lrG', type=float, default=0.0002)
     parser.add_argument('--lrD', type=float, default=0.0002)
     parser.add_argument('--beta1', type=float, default=0.5)
@@ -80,9 +86,9 @@ def check_args(args):
     if not os.path.exists(args.result_dir):
         os.makedirs(args.result_dir)
 
-    # --log_dir
-    if not os.path.exists(args.log_dir):
-        os.makedirs(args.log_dir)
+    # # --log_dir
+    # if not os.path.exists(args.log_dir):
+    #     os.makedirs(args.log_dir)
 
     # --epoch
     try:

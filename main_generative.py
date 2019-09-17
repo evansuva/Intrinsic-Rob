@@ -1,5 +1,5 @@
 import waitGPU
-waitGPU.wait(utilization=20, available_memory=10000, interval=20)
+waitGPU.wait(utilization=40, available_memory=8000, interval=20)
 
 import sys
 import os

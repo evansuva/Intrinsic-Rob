@@ -6,8 +6,6 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torch.nn.functional as F
 
-import utils
-
 # from convex_adversarial import Dense, DenseSequential
 
 import numpy as np
@@ -32,16 +30,15 @@ class CustomDataset(Dataset):
         self.transform = transform
 
     def __getitem__(self, index):
-
-        img_as_np = self.data[index].reshape(self.height, self.width, self.channels)
-
+        img_as_np = self.data[index].reshape(self.channels, self.height, self.width)
         single_image_label = self.labels[index]
 
         # transform image to tensor
+        img_as_tensor = torch.from_numpy(img_as_np).float()
         if self.transform is not None:
-            img_as_tensor = self.transform(img_as_np)
+            img_as_tensor = self.transform(img_as_tensor)
         else:
-            img_as_tensor = img_as_np
+            img_as_tensor = torch.from_numpy(img_as_np).float()
 
         # return image and the label
         return (img_as_tensor, single_image_label)
@@ -62,23 +59,11 @@ def mnist_loaders(batch_size, path, is_shuffle=False):
 
 def custom_mnist_loaders(batch_size, train_path, test_path, is_shuffle=False):
 
-    mnist_train = CustomDataset(train_path, 28, 28, 1, transforms.ToTensor())
-    mnist_test = CustomDataset(test_path, 28, 28, 1, transforms.ToTensor())
+    mnist_train = CustomDataset(train_path, 28, 28, 1)
+    mnist_test = CustomDataset(test_path, 28, 28, 1)
     
     train_loader = td.DataLoader(dataset=mnist_train, batch_size=batch_size, shuffle=True, pin_memory=True)
     test_loader = td.DataLoader(dataset=mnist_test, batch_size=batch_size, shuffle=is_shuffle, pin_memory=True)
-
-    # for i, (X,y) in enumerate(test_loader):
-
-    #     # print(X.size())
-    #     # print(X)
-    #     print(X.size())
-    #     print(X)
-    #     X = X.cpu().data.numpy().transpose(0, 2, 3, 1)
-    #     print(X.shape)
-    #     utils.save_images(X[:25, :, :, :], [5, 5], 'test.png')
-
-    #     raise NotImplementedError()
 
     return train_loader, test_loader        
 
@@ -113,26 +98,15 @@ def cifar_loaders(batch_size, path, is_shuffle=False):
 
     train_loader = td.DataLoader(cifar_train, batch_size=batch_size, shuffle=True, pin_memory=True)
     test_loader = td.DataLoader(cifar_test, batch_size=batch_size, shuffle=is_shuffle, pin_memory=True)
+
     return train_loader, test_loader
 
 def custom_cifar_loaders(batch_size, train_path, test_path, is_shuffle=False): 
-    cifar_train = CustomDataset(train_path, 32, 32, 3, transforms.ToTensor())
-    cifar_test = CustomDataset(test_path, 32, 32, 3, transforms.ToTensor())
+    cifar_train = CustomDataset(train_path, 32, 32, 3)
+    cifar_test = CustomDataset(test_path, 32, 32, 3)
 
     train_loader = td.DataLoader(cifar_train, batch_size=batch_size, shuffle=True, pin_memory=True)
     test_loader = td.DataLoader(cifar_test, batch_size=batch_size, shuffle=is_shuffle, pin_memory=True)
-    
-    # for i, (X,y) in enumerate(test_loader):
-
-    #     # print(X.size())
-    #     # print(X)
-    #     print(X.size())
-    #     print(X)
-    #     X = X.cpu().data.numpy().transpose(0, 2, 3, 1)
-    #     print(X.shape)
-    #     utils.save_images(X[:25, :, :, :], [5, 5], 'test.png')
-
-    #     raise NotImplementedError()
 
     return train_loader, test_loader
 

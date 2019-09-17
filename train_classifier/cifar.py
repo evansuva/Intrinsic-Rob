@@ -1,10 +1,11 @@
 import waitGPU
-waitGPU.wait(utilization=20, available_memory=10000, interval=60)
+waitGPU.wait(utilization=40, available_memory=8000, interval=60)
 
 import problems as pblm
 from trainer import *
 import setproctitle
 import random
+
 
 def select_model(m): 
     if m == 'small': 
@@ -20,7 +21,7 @@ def select_model(m):
 if __name__ == "__main__": 
     args = pblm.argparser(prefix='cifar', gan_type='SNGAN', 
                 starting_epsilon=0.01, opt='sgd', lr=0.05, 
-                batch_size_test=10, proj=50, norm_train='l2_normal', 
+                batch_size_test=8, proj=50, norm_train='l2_normal', 
                 norm_test='l2', epsilon=0.1412, seed=0)
 
     setproctitle.setproctitle('python')

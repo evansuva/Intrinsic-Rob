@@ -1,3 +1,6 @@
+import waitGPU
+waitGPU.wait(utilization=20, available_memory=10000, interval=20)
+
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generative'))
@@ -36,8 +39,8 @@ def parse_args():
     parser.add_argument('--mode', type=str, default='evaluate', choices=['train','evaluate','reconstruct'])
     parser.add_argument('--epoch', type=int, default=25, help='The number of epochs to run')
     parser.add_argument('--batch_size', type=int, default=64, help='The size of batch')
-    parser.add_argument('--input_size', type=int, default=28, help='The size of input image')
-    parser.add_argument('--channels',  type=int, default=1, help='The number of rgb channels')
+    parser.add_argument('--input_size', type=int, default=32, help='The size of input image')
+    parser.add_argument('--channels',  type=int, default=3, help='The number of rgb channels')
     
     parser.add_argument('--save_dir', type=str, default='generative/models',
                         help='Directory name to save the model')
@@ -65,9 +68,10 @@ def parse_args():
 
     # for reconstructing dataset
     parser.add_argument('--seed', type=int, default=0, help='manual seed number')
-    parser.add_argument('--train_parts', type=int, default=6, help='number of partitions for training dataset')
-    parser.add_argument('--train_size', type=int, default=10000, help='number of training samples')
-    parser.add_argument('--test_size', type=int, default=10000, help='number of testing samples')
+    parser.add_argument('--train_parts', type=int, default=10, help='number of partitions for training dataset')
+    parser.add_argument('--test_parts', type=int, default=2, help='number of partitions for testing dataset')
+    parser.add_argument('--train_size', type=int, default=5000, help='number of training samples')
+    parser.add_argument('--test_size', type=int, default=5000, help='number of testing samples')
     
     return check_args(parser.parse_args())
 

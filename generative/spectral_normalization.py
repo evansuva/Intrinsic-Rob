@@ -106,7 +106,7 @@ class SpectralNorm(nn.Module):
             u = w.view(height, -1) @ v
             u /= (u.norm(p=2) + 1e-12)
 
-        w.data /= ((u.t() @ w.view(height, -1) @ v).data)/0.5  # Spectral normalization
+        w.data /= ((u.t() @ w.view(height, -1) @ v).data)  # Spectral normalization
 
     def forward(self, x):
         self.update_params(self.module, self.niter)

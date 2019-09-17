@@ -1,15 +1,14 @@
 import utils, torch, time, os, pickle
 import numpy as np
 import torch.nn as nn
-import torch.nn.functional as f
 import torch.optim as optim
+import torch.nn.functional as f
 from dataloader import dataloader
-
-from torch.autograd import grad
+from torch.autograd import Variable
 from spectral_normalization import SpectralNorm
 
-class generator(nn.Module):
 
+class generator(nn.Module):
     def __init__(self, input_dim=100, output_dim=1, input_size=32, class_num=10):
         super(generator, self).__init__()
         self.input_dim = input_dim
@@ -18,31 +17,45 @@ class generator(nn.Module):
         self.class_num = class_num
 
         self.fc = nn.Sequential(
-            SpectralNorm(nn.Linear(self.input_dim + self.class_num, 1024)),
-            nn.BatchNorm1d(1024),
-            nn.ReLU(),
-            SpectralNorm(nn.Linear(1024, 128 * (self.input_size // 4) * (self.input_size // 4))),
-            nn.BatchNorm1d(128 * (self.input_size // 4) * (self.input_size // 4)),
-            nn.ReLU(),
+            nn.Linear(self.input_dim + self.class_num, 4 * 4 * 512),
+            nn.BatchNorm1d(4 * 4 * 512),
+            nn.ReLU()
         )
         self.deconv = nn.Sequential(
-            SpectralNorm(nn.ConvTranspose2d(128, 64, 4, 2, 1)),
+            nn.ConvTranspose2d(512, 256, 4, 2, 1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+
+            nn.ConvTranspose2d(256, 128, 4, 2, 1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+
+            nn.ConvTranspose2d(128, 64, 4, 2, 1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
-            SpectralNorm(nn.ConvTranspose2d(64, self.output_dim, 4, 2, 1)),
-            nn.Tanh(),
+
+            nn.ConvTranspose2d(64, 3, 3, 1, 1),
+            nn.Tanh()
         )
+
         utils.initialize_weights(self)
 
     def forward(self, input, label):
         x = torch.cat([input, label], 1)
         x = self.fc(x)
-        x = x.view(-1, 128, (self.input_size // 4), (self.input_size // 4))
+        x = x.view(-1, 512, 4, 4)
         x = self.deconv(x)
 
         return x
-        
+
 class discriminator(nn.Module):
+    # def forward(self, input):
+    #     x = self.conv(input)
+    #     # x = x.view(-1, 128 * (self.input_size // 4) * (self.input_size // 4))
+    #     x = x.view(x.size(0), -1)
+    #     x = self.fc(x)
+
+    #     return x
 
     def __init__(self, input_dim=1, output_dim=1, input_size=32, class_num=10):
         super(discriminator, self).__init__()
@@ -52,53 +65,70 @@ class discriminator(nn.Module):
         self.class_num = class_num
 
         self.conv = nn.Sequential(
-            nn.Conv2d(self.input_dim, 64, 4, 2, 1),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(64, 128, 4, 2, 1),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(0.2),
-        )
-        self.fc1 = nn.Sequential(
-            nn.Linear(128 * (self.input_size // 4) * (self.input_size // 4), 1024),
-            nn.BatchNorm1d(1024),
-            nn.LeakyReLU(0.2),
+            SpectralNorm(
+                nn.Conv2d(3, 64, 3, 1, 1)
+            ),
+            nn.LeakyReLU(0.1),
+            SpectralNorm(
+                nn.Conv2d(64, 64, 4, 2, 1)
+            ),
+            nn.LeakyReLU(0.1),
+            SpectralNorm(
+                nn.Conv2d(64, 128, 3, 1, 1)
+            ),
+            nn.LeakyReLU(0.1),
+            SpectralNorm(
+                nn.Conv2d(128, 128, 4, 2, 1)
+            ),
+            nn.LeakyReLU(0.1),
+            SpectralNorm(
+                nn.Conv2d(128, 256, 3, 1, 1)
+            ),
+            nn.LeakyReLU(0.1),
+            SpectralNorm(
+                nn.Conv2d(256, 256, 4, 2, 1)
+            ),
+            nn.LeakyReLU(0.1),
+            SpectralNorm(
+                nn.Conv2d(256, 512, 3, 1, 1)
+            ),
+
         )
         self.dc = nn.Sequential(
-            nn.Linear(1024, self.output_dim),
+            SpectralNorm(nn.Linear(512 * 4 * 4, self.output_dim)),
             nn.Sigmoid(),
         )
-        self.cl = nn.Sequential(
-            nn.Linear(1024, self.class_num),
+        self.cl =  nn.Sequential(
+            SpectralNorm(nn.Linear(512 * 4 * 4, self.class_num)),
+            nn.Sigmoid(),
         )
+
         utils.initialize_weights(self)
 
     def forward(self, input):
         x = self.conv(input)
-        x = x.view(-1, 128 * (self.input_size // 4) * (self.input_size // 4))
-        x = self.fc1(x)
+        x = x.view(x.size(0), -1)
         d = self.dc(x)
         c = self.cl(x)
 
         return d, c
+
 
 class SNGAN(object):
     def __init__(self, args):
         # parameters for train
         self.epoch = args.epoch
         self.batch_size = args.batch_size
-        self.save_dir = args.save_dir 
+        self.save_dir = args.save_dir
         self.result_dir = args.result_dir
         self.dataset = args.dataset
         # self.log_dir = args.log_dir
         self.gpu_mode = args.gpu_mode
-        self.model_name = args.gan_type + '_' + str(args.lambda_)
+        self.model_name = args.gan_type
         self.input_size = args.input_size
         self.z_dim = 100
         self.class_num = 10
         self.sample_num = self.class_num ** 2
-
-        self.alpha = args.alpha
-        self.lambda_ = args.lambda_
 
         # parameters for evaluate
         self.n_samples = args.n_samples
@@ -110,7 +140,7 @@ class SNGAN(object):
         self.train_size = args.train_size
         self.test_size = args.test_size
         self.train_parts = args.train_parts
-
+        self.test_parts = args.test_parts
 
         # load dataset
         self.data_loader = dataloader(self.dataset, self.input_size, self.batch_size)
@@ -139,9 +169,9 @@ class SNGAN(object):
         # fixed noise & condition
         self.sample_z_ = torch.zeros((self.sample_num, self.z_dim))
         for i in range(self.class_num):
-            self.sample_z_[i*self.class_num] = torch.rand(1, self.z_dim)
+            self.sample_z_[i * self.class_num] = torch.rand(1, self.z_dim)
             for j in range(1, self.class_num):
-                self.sample_z_[i*self.class_num + j] = self.sample_z_[i*self.class_num]
+                self.sample_z_[i * self.class_num + j] = self.sample_z_[i * self.class_num]
 
         temp = torch.zeros((self.class_num, 1))
         for i in range(self.class_num):
@@ -149,7 +179,7 @@ class SNGAN(object):
 
         temp_y = torch.zeros((self.sample_num, 1))
         for i in range(self.class_num):
-            temp_y[i*self.class_num: (i+1)*self.class_num] = temp
+            temp_y[i * self.class_num: (i + 1) * self.class_num] = temp
 
         self.sample_y_ = torch.zeros((self.sample_num, self.class_num)).scatter_(1, temp_y.type(torch.LongTensor), 1)
         if self.gpu_mode:
@@ -176,7 +206,9 @@ class SNGAN(object):
                 if iter == self.data_loader.dataset.__len__() // self.batch_size:
                     break
                 z_ = torch.rand((self.batch_size, self.z_dim))
-                y_vec_ = torch.zeros((self.batch_size, self.class_num)).scatter_(1, y_.type(torch.LongTensor).unsqueeze(1), 1)
+                y_vec_ = torch.zeros((self.batch_size, self.class_num)).scatter_(1,
+                                                                                 y_.type(torch.LongTensor).unsqueeze(1),
+                                                                                 1)
                 if self.gpu_mode:
                     x_, z_, y_vec_ = x_.cuda(), z_.cuda(), y_vec_.cuda()
 
@@ -192,7 +224,7 @@ class SNGAN(object):
                 D_fake_loss = self.BCE_loss(D_fake, self.y_fake_)
                 C_fake_loss = self.CE_loss(C_fake, torch.max(y_vec_, 1)[1])
 
-                D_loss = D_real_loss + self.alpha*C_real_loss + D_fake_loss + self.alpha*C_fake_loss
+                D_loss = D_real_loss + C_real_loss + D_fake_loss + C_fake_loss
                 self.train_hist['D_loss'].append(D_loss.item())
 
                 D_loss.backward()
@@ -201,35 +233,27 @@ class SNGAN(object):
                 # update G network
                 self.G_optimizer.zero_grad()
 
-                z_.requires_grad = True
                 G_ = self.G(z_, y_vec_)
                 D_fake, C_fake = self.D(G_)
 
                 G_loss = self.BCE_loss(D_fake, self.y_real_)
                 C_fake_loss = self.CE_loss(C_fake, torch.max(y_vec_, 1)[1])
 
-                G_loss += self.alpha*C_fake_loss
-
-                # penalize global Lipschitz using gradient norm
-                gradients = grad(outputs=G_, inputs=z_, grad_outputs=torch.ones(G_.size()).cuda(),
-                                    create_graph=True, retain_graph=True, only_inputs=True)[0]
-                # gradients = torch.zeros(G_.size()).cuda()
-
-                reg_loss = (gradients.view(gradients.size()[0], -1).norm(2, 1) ** 2).mean()
-                G_loss += self.lambda_ * reg_loss
-
+                G_loss += C_fake_loss
                 self.train_hist['G_loss'].append(G_loss.item())
 
                 G_loss.backward()
                 self.G_optimizer.step()
 
                 if ((iter + 1) % 100) == 0:
-                    print("Epoch: [%2d] [%4d/%4d] D_loss: %.8f, G_loss: %.8f, reg_loss: %.4f" %
-                          ((epoch + 1), (iter + 1), self.data_loader.dataset.__len__() // self.batch_size, D_loss.item(), G_loss.item(), reg_loss.item()))
+                    print("Epoch: [%2d] [%4d/%4d] D_loss: %.8f, G_loss: %.8f" %
+                          (
+                          (epoch + 1), (iter + 1), self.data_loader.dataset.__len__() // self.batch_size, D_loss.item(),
+                          G_loss.item()))
 
             self.train_hist['per_epoch_time'].append(time.time() - epoch_start_time)
             with torch.no_grad():
-                self.visualize_results((epoch+1))
+                self.visualize_results((epoch + 1))
 
         self.train_hist['total_time'].append(time.time() - start_time)
         print("Avg one epoch time: %.2f, total %d epochs time: %.2f" % (np.mean(self.train_hist['per_epoch_time']),
@@ -237,7 +261,8 @@ class SNGAN(object):
         print("Training finish!... save training results")
 
         self.save()
-        utils.generate_animation(self.result_dir + '/' + self.dataset + '/' + self.model_name + '/' + self.model_name, self.epoch)
+        utils.generate_animation(self.result_dir + '/' + self.dataset + '/' + self.model_name + '/' + self.model_name,
+                                 self.epoch)
         utils.loss_plot(self.train_hist, os.path.join(self.save_dir, self.dataset, self.model_name), self.model_name)
 
     def visualize_results(self, epoch, fix=True):
@@ -253,7 +278,8 @@ class SNGAN(object):
             samples = self.G(self.sample_z_, self.sample_y_)
         else:
             """ random noise """
-            sample_y_ = torch.zeros(self.batch_size, self.class_num).scatter_(1, torch.randint(0, self.class_num - 1, (self.batch_size, 1)).type(torch.LongTensor), 1)
+            sample_y_ = torch.zeros(self.batch_size, self.class_num).scatter_(1, torch.randint(0, self.class_num - 1, (
+            self.batch_size, 1)).type(torch.LongTensor), 1)
             sample_z_ = torch.rand((self.batch_size, self.z_dim))
             if self.gpu_mode:
                 sample_z_, sample_y_ = sample_z_.cuda(), sample_y_.cuda()
@@ -287,26 +313,31 @@ class SNGAN(object):
         self.G.load_state_dict(torch.load(os.path.join(save_dir, self.model_name + '_G.pkl')))
         self.D.load_state_dict(torch.load(os.path.join(save_dir, self.model_name + '_D.pkl')))
 
-    
     def get_lipschitz(self):
         self.G.eval()
         self.load()
         L = np.zeros((self.class_num, self.n_samples))
 
-        log = open(self.save_dir+'/'+self.dataset+'/'+self.model_name+'/'+self.model_name+'_lipschitz.txt', "w")
+        log = open(
+            self.save_dir + '/' + self.dataset + '/' + self.model_name + '/' + self.model_name + '_lipschitz.txt', "w")
 
         for i in range(self.class_num):
             for j in range(self.n_samples):
                 sample_z = torch.rand((1, self.z_dim))
                 sample_y = torch.zeros(1, self.class_num).scatter_(1, torch.LongTensor([[i]]), 1)
 
-                L[i,j] = get_local_lipschitz(self.G, sample_z, sample_y, self.n_neighbors, self.gpu_mode, self.z_dim, self.radius)
+                L[i, j] = get_local_lipschitz(self.G, sample_z, sample_y, self.n_neighbors, self.gpu_mode, self.z_dim,
+                                              self.radius)
 
             # print the results for class i
-            print("""class: %d, (95%%) lipschitz: %.2f, (99%%) lipschitz: %.2f, (99.9%%) lipschitz: %.2f, (max) lipschitz: %.2f""" % 
-                                    (i, np.percentile(L[i,:], q=95), np.percentile(L[i,:], q=99), np.percentile(L[i,:], q=99.9), np.max(L[i,:])))
-                                    
-            print("%d, %.2f, %.2f, %.2f, %.2f" % (i, np.percentile(L[i,:], q=95), np.percentile(L[i,:], q=99), np.percentile(L[i,:], q=99.9), np.max(L[i,:])), file=log)
+            print(
+                """class: %d, (95%%) lipschitz: %.2f, (99%%) lipschitz: %.2f, (99.9%%) lipschitz: %.2f, (max) lipschitz: %.2f""" %
+                (i, np.percentile(L[i, :], q=95), np.percentile(L[i, :], q=99), np.percentile(L[i, :], q=99.9),
+                 np.max(L[i, :])))
+
+            print("%d, %.2f, %.2f, %.2f, %.2f" % (
+            i, np.percentile(L[i, :], q=95), np.percentile(L[i, :], q=99), np.percentile(L[i, :], q=99.9),
+            np.max(L[i, :])), file=log)
             log.flush()
 
     def reconstruct(self):
@@ -321,14 +352,6 @@ class SNGAN(object):
             labels = torch.randint(0, self.class_num, (self.train_size, 1)).type(torch.LongTensor)
             sample_y = torch.zeros(self.train_size, self.class_num).scatter_(1, labels, 1)
 
-            # estimate Lipschitz constants of the conditional generator for each sampled z 
-            lipschitz = np.zeros(self.train_size)
-            for i in range(self.train_size):
-                lipschitz[i] = get_local_lipschitz(self.G, sample_z[i], sample_y[i], 
-                                        self.n_neighbors, self.gpu_mode, z_dim=100, radius=1)
-                if i % 200 == 0:            
-                    print("Iteration: [%d] [%5d/%5d] lipschitz: %.2f" % (k, i, self.train_size, lipschitz[i]))
-
             if self.gpu_mode:
                 sample_z, sample_y = sample_z.cuda(), sample_y.cuda()
 
@@ -342,52 +365,52 @@ class SNGAN(object):
             if k==0:
                 labels_train = labels
                 samples_train = samples 
-                lipschitz_train = lipschitz
             else:
                 labels_train = np.concatenate((labels_train, labels), axis=0)
                 samples_train = np.concatenate((samples_train, samples), axis=0)
-                lipschitz_train = np.concatenate((lipschitz_train, lipschitz), axis=None)
 
         data_dir = 'data/'+self.dataset+'/'+self.model_name
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
 
-        # np.save('data/'+self.dataset+'/'+self.model_name+'/samples_train', samples_train)
-        # np.save('data/'+self.dataset+'/'+self.model_name+'/labels_train', labels_train.squeeze(1))
-        np.savez(data_dir+'/train', sample=samples_train, label=labels_train.squeeze(1), lipschitz=lipschitz_train)
+        np.savez(data_dir+'/train', sample=samples_train, label=labels_train.squeeze(1))
 
         # for testing
         torch.manual_seed(self.manual_seed+999)
-        sample_z_test = torch.rand((self.test_size, self.z_dim))
-        labels_test = torch.randint(0, self.class_num, (self.test_size, 1)).type(torch.LongTensor)
-        sample_y_test = torch.zeros(self.test_size, self.class_num).scatter_(1, labels_test, 1)
 
-        # estimate Lipschitz constants of the conditional generator for each sampled z 
-        lipschitz_test = np.zeros(self.test_size)
-        for i in range(self.test_size):
-            lipschitz_test[i] = get_local_lipschitz(self.G, sample_z_test[i], sample_y_test[i], 
-                                    self.n_neighbors, self.gpu_mode, z_dim=100, radius=1)
-            if i % 200 == 0:            
-                print("Iteration: [%d] [%5d/%5d] lipschitz: %.2f" % (k, i, self.train_size, lipschitz_test[i]))
+        for k in range(self.test_parts):
+            sample_z = torch.rand((self.test_size, self.z_dim))
+            labels = torch.randint(0, self.class_num, (self.test_size, 1)).type(torch.LongTensor)
+            sample_y = torch.zeros(self.test_size, self.class_num).scatter_(1, labels, 1)
+            
+            if self.gpu_mode:
+                sample_z, sample_y = sample_z.cuda(), sample_y.cuda()
 
-        if self.gpu_mode:
-            sample_z_test, sample_y_test = sample_z_test.cuda(), sample_y_test.cuda()
+            samples = (self.G(sample_z, sample_y) + 1) / 2
 
-        samples_test = (self.G(sample_z_test, sample_y_test) + 1) / 2
+            if self.gpu_mode:
+                samples = samples.cpu().data.numpy()
+            else:
+                samples = samples.data.numpy()
 
-        if self.gpu_mode:
-            samples_test = samples_test.cpu().data.numpy()
-        else:
-            samples_test = samples_test.data.numpy()
+            if k==0:
+                labels_test = labels
+                samples_test = samples 
+            else:
+                labels_test = np.concatenate((labels_test, labels), axis=0)
+                samples_test = np.concatenate((samples_test, samples), axis=0)
 
-        # np.save('data/'+self.dataset+'/'+self.model_name+'/samples_test', samples_test)
-        # np.save('data/'+self.dataset+'/'+self.model_name+'/labels_test', labels_test.squeeze(1))
-        np.savez(data_dir+'/test', sample=samples_test, label=labels_test.squeeze(1), lipschitz=lipschitz_test)
+        np.savez(data_dir+'/test', sample=samples_test, label=labels_test.squeeze(1))
+
+        print(samples_test.shape)
 
         samples_test = samples_test.transpose(0, 2, 3, 1)
+
         utils.save_images(samples_test[:100, :, :, :], [10, 10], 
                           self.save_dir+'/'+self.dataset+'/'+self.model_name+'/gen_img.png')
 
+        # print(samples_test.shape)
+        # raise NotImplementedError()
 
 # compute the local lipschitz constant of a generator using samples
 def get_local_lipschitz(G, sample_z, sample_y, n_neighbors, gpu_mode, z_dim=100, radius=1):
@@ -413,3 +436,4 @@ def get_local_lipschitz(G, sample_z, sample_y, n_neighbors, gpu_mode, z_dim=100,
     lipschitz = torch.exp(torch.max(log_diff)).cpu().item()
 
     return lipschitz 
+

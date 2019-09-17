@@ -377,7 +377,6 @@ class SNGAN(object):
 
         # for testing
         torch.manual_seed(self.manual_seed+999)
-
         for k in range(self.test_parts):
             sample_z = torch.rand((self.test_size, self.z_dim))
             labels = torch.randint(0, self.class_num, (self.test_size, 1)).type(torch.LongTensor)
@@ -402,17 +401,16 @@ class SNGAN(object):
 
         np.savez(data_dir+'/test', sample=samples_test, label=labels_test.squeeze(1))
 
-        print(samples_test.shape)
 
         samples_test = samples_test.transpose(0, 2, 3, 1)
 
+        # compute the local lipschitz constant of a generator using samples
         utils.save_images(samples_test[:100, :, :, :], [10, 10], 
                           self.save_dir+'/'+self.dataset+'/'+self.model_name+'/gen_img.png')
 
         # print(samples_test.shape)
         # raise NotImplementedError()
 
-# compute the local lipschitz constant of a generator using samples
 def get_local_lipschitz(G, sample_z, sample_y, n_neighbors, gpu_mode, z_dim=100, radius=1):
 
     z_repeat = sample_z.repeat(n_neighbors,1)

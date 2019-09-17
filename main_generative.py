@@ -222,7 +222,7 @@ def main():
 
         # elif args.dataset == 'cifar10':
         #     model = inception_v3(pretrained=True, transform_input=False)
-        #     transform = transforms.Compose([transforms.ToTensor(), 
+        #     transform = transforms.Compose([transforms.ToTensor(),
         #                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         #     dataset = dset.CIFAR10(root='data/cifar10/', download=True, transform=transform)
         #     img_size = 299    

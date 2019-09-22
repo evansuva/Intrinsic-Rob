@@ -15,11 +15,11 @@ def select_model(m):
     # elif m == 'resNet':
     #     model = pblm.cifar_model_resnet().cuda()
     else:
-        raise ValueError('model argument not recognized for CIFAR-10')
+        raise ValueError('model argument not recognized for imagenet')
     return model
 
 if __name__ == "__main__": 
-    args = pblm.argparser(prefix='cifar', gan_type='SNGAN', 
+    args = pblm.argparser(prefix='imagenet', gan_type='biggan',
                 starting_epsilon=0.01, opt='sgd', lr=0.05, 
                 batch_size_test=8, proj=50, norm_train='l2_normal', 
                 norm_test='l2', epsilon=0.1412, seed=0)
@@ -40,20 +40,20 @@ if __name__ == "__main__":
     test_res = open(saved_filepath + '/test_res.txt', "w")
 
     # load the data
-    if args.prefix == "cifar":
+    if args.prefix == "imagenet":
         train_loader, _ = pblm.cifar_loaders(args.batch_size, '../data/cifar10', )
         _, test_loader  = pblm.cifar_loaders(args.batch_size_test, '../data/cifar10')
 
-    elif args.prefix == "custom_cifar":
+    elif args.prefix == "custom_imagenet":
         train_loader, _ = pblm.custom_cifar_loaders(batch_size=args.batch_size, 
-                                train_path= '../data/cifar10/'+args.gan_type+'/train.npz',
-                                test_path = '../data/cifar10/'+args.gan_type+'/test.npz')
+                                train_path= '../imagenet_gen/data/imagenet/'+args.gan_type+'/train.npz',
+                                test_path = '../imagenet_gen/data/imagenet/'+args.gan_type+'/test.npz')
         _, test_loader  = pblm.custom_cifar_loaders(batch_size=args.batch_size_test, 
-                                train_path= '../data/cifar10/'+args.gan_type+'/train.npz',
-                                test_path = '../data/cifar10/'+args.gan_type+'/test.npz')
+                                train_path= '../imagenet_gen/data/imagenet/'+args.gan_type+'/train.npz',
+                                test_path = '../imagenet_gen/data/imagenet/'+args.gan_type+'/test.npz')
 
     else:
-        raise ValueError("prefix argument not recognized for CIFAR-10") 
+        raise ValueError("prefix argument not recognized for imagenet")
 
     # specify the model and the optimizer
     torch.manual_seed(args.seed)
@@ -87,6 +87,9 @@ if __name__ == "__main__":
             
             clas_err = evaluate_baseline(test_loader, model, t, test_res, args.verbose)
 
+            if (t+1) % 1 == 0:
+                torch.save(model.state_dict(), model_path+"_epoch_"+str(t+1)+".pth")
+
         # robust training
         elif args.method == 'zico_robust':
             train_robust(train_loader, model, opt, epsilon, t, train_res, args.verbose, 
@@ -101,3 +104,4 @@ if __name__ == "__main__":
             # save the checkpoint for robust training
             if (t+1) % 5 == 0:
                 torch.save(model.state_dict(), model_path+"_epoch_"+str(t+1)+".pth")
+

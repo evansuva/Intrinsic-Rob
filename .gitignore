@@ -17,3 +17,5 @@ train_classifier/saved_log
 
 *._*
 *.DS_Store
+*.pt
+*.yml

@@ -1,9 +1,14 @@
 # An Empirical Evaluation of Intrinsic Robustness on Real Distributions
 
-The goal of this project:
-* Theoretically, derive a intrinsic robustness bound for a large collection of imperfect classifiers using Lipschitz parameter
+The goals of this project are to:
 
-* Empirically, evaluate the intrinsic robustness bound for benchmark image distributions
+1. Theoretically, derive a intrinsic robustness bound for a large collection of imperfect classifiers using Lipschitz parameter.
 
-* Additionally, we further study the performance of existing state-of-the-art robsut classifiers on various synthetical generated image distributions
+2. Empirically, evaluate the intrinsic robustness bound for benchmark image distributions.
+
+Additionally, we further study the performance of existing state-of-the-art robust classifiers on various synthetically generated image distributions.
+
+## Paper
+
+<add paper ref and link once it is available in arxiv>
 
